@@ -11,7 +11,7 @@ const Home = () => {
   const { userData, serverUrl, setUserData, getGeminiResponse } =
     useContext(userDataContext);
   const navigate = useNavigate();
-  const [listning, setListening] = useState(false);
+  const [listening, setListening] = useState(false);
   const isSpeakingRef = useRef(false);
   const [userText, setUserText] = useState("");
   const recognitionRef = useRef(null);

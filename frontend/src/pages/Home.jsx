@@ -186,36 +186,34 @@ const Home = () => {
       }
     }, 1000);
 
-    const safeRecognition = () => {
-      if (!isSpeakingRef.current && !isRecognizingRef.current) {
-        try {
-          recognition.start();
-        } catch (err) {
-          if (err.name !== "InvalidStateError") {
-          }
-        }
+   const safeRecognition = () => {
+  if (!isSpeakingRef.current && !isRecognizingRef.current) {
+    try {
+      recognition.start();
+    } catch (err) {
+      if (err.name !== "InvalidStateError") {
+        console.error(err);
       }
-    };
+    }
+  }
+};
+
     recognition.onstart = () => {
       isRecognizingRef.current = true;
       setListening(true);
     };
     recognition.onend = () => {
-      isRecognizingRef.current = false;
-      setListening(false);
-      if (isMounted && !isSpeakingRef.current) {
-        setTimeout(() => {
-          if (isMounted) {
-            try {
-              recognition.start();
-              console.log("Recognition restarted");
-            } catch (e) {
-              if (e.name !== "InvalidStateError") console.error(e);
-            }
-          }
-        }, 1000);
+  isRecognizingRef.current = false;
+  setListening(false);
+  if (isMounted && !isSpeakingRef.current) {
+    setTimeout(() => {
+      if (isMounted) {
+        safeRecognition();
       }
-    };
+    }, 1000);
+  }
+};
+
 
     if (!isSpeakingRef.current) {
       setTimeout(() => {

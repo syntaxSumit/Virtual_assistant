@@ -163,105 +163,99 @@ const Home = () => {
     }
   };
 
-  useEffect(() => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.lang = "en-US";
-    recognition.interimResults = false;
+ useEffect(() => {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.lang = "en-US";
+  recognition.interimResults = false;
 
-    recognitionRef.current = recognition;
+  recognitionRef.current = recognition;
 
-    let isMounted = true;
-    const startTimeout = setTimeout(() => {
-      if (isMounted && !isSpeakingRef.current && !isRecognizingRef.current) {
-        try {
-          recognition.start();
-        } catch (e) {
-          if (e.name !== "InvalidStateError") {
-            console.error(e);
-          }
+  let isMounted = true;
+
+  const safeRecognition = () => {
+    if (!isSpeakingRef.current && !isRecognizingRef.current) {
+      try {
+        console.log("Recognition started");
+        recognition.start();
+      } catch (err) {
+        if (err.name !== "InvalidStateError") {
+          console.error(err);
         }
       }
-    }, 1000);
-
-   const safeRecognition = () => {
-  if (!isSpeakingRef.current && !isRecognizingRef.current) {
-    try {
-      recognition.start();
-    } catch (err) {
-      if (err.name !== "InvalidStateError") {
-        console.error(err);
-      }
     }
-  }
-};
+  };
 
-    recognition.onstart = () => {
-      isRecognizingRef.current = true;
-      setListening(true);
-    };
-    recognition.onend = () => {
-  isRecognizingRef.current = false;
-  setListening(false);
-  if (isMounted && !isSpeakingRef.current) {
-    setTimeout(() => {
-      if (isMounted) {
-        safeRecognition();
-      }
-    }, 1000);
-  }
-};
+  recognition.onstart = () => {
+    isRecognizingRef.current = true;
+    setListening(true);
+    console.log("Recognition started (onstart)");
+  };
 
+  recognition.onend = () => {
+    isRecognizingRef.current = false;
+    setListening(false);
+    console.log("Recognition ended");
+    if (isMounted && !isSpeakingRef.current) {
+      setTimeout(() => {
+        if (isMounted) {
+          safeRecognition();
+        }
+      }, 1000);
+    }
+  };
 
-    if (!isSpeakingRef.current) {
+  recognition.onerror = (event) => {
+    isRecognizingRef.current = false;
+    setListening(false);
+    console.log("Recognition error:", event.error);
+    if (event.error !== "aborted" && !isSpeakingRef.current) {
       setTimeout(() => {
         safeRecognition();
       }, 1000);
     }
+  };
 
-    recognition.onerror = (event) => {
+  recognition.onresult = async (event) => {
+    const transcript = event.results[event.results.length - 1][0].transcript.trim();
+    console.log("Recognition result:", transcript);
+    if (transcript.toLowerCase().includes(userData.assistantName.toLowerCase())) {
+      setAiText("");
+      setUserText(transcript);
+      recognition.stop();
       isRecognizingRef.current = true;
       setListening(false);
-      if (event.error !== "aborted" && !isSpeakingRef.current) {
-        setTimeout(() => {
-          safeRecognition();
-        }, 1000);
+      const data = await getGeminiResponse(transcript);
+      if (data) {
+        handleCommand(data);
+        setAiText(data.response);
       }
-    };
+      setUserText("");
+    }
+  };
 
-    recognition.onresult = async (event) => {
-      const transcript =
-        event.results[event.results.length - 1][0].transcript.trim();
-      if (
-        transcript.toLowerCase().includes(userData.assistantName.toLowerCase())
-      ) {
-        setAiText("");
-        setUserText(transcript);
-        recognition.stop();
-        isRecognizingRef.current = true;
-        setListening(false);
-        const data = await getGeminiResponse(transcript);
-        if (data) {
-          handleCommand(data);
-          setAiText(data.response);
-        }
-        setUserText("");
-      }
-    };
+  // Start recognition after 1 second
+  setTimeout(() => {
+    if (isMounted && !isSpeakingRef.current && !isRecognizingRef.current) {
+      safeRecognition();
+    }
+  }, 1000);
 
-    const fallback = setInterval(() => {
-      if (!isRecognizingRef.current && !isSpeakingRef.current) {
-        safeRecognition();
-      }
-    }, 5000);
-    return () => {
-      recognition.stop();
-      clearInterval(fallback);
-      setListening(false);
-    };
-  }, [userData.assistantName, getGeminiResponse]);
+  // Fallback interval to restart if needed
+  const fallback = setInterval(() => {
+    if (!isRecognizingRef.current && !isSpeakingRef.current) {
+      safeRecognition();
+    }
+  }, 5000);
+
+  return () => {
+    recognition.stop();
+    clearInterval(fallback);
+    isMounted = false;
+  };
+}, [userData.assistantName, getGeminiResponse]);
+
 
   return (
     <div

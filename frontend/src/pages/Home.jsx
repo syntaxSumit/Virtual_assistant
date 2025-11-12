@@ -276,41 +276,50 @@ const Home = () => {
     };
 
     // ========== ONERROR ==========
-    recognition.onerror = (event) => {
-      // ✅ FIX: Set false on error, not true!
-      isRecognizingRef.current = false;
-      setListening(false);
+  recognition.onerror = (event) => {
+  // ✅ FIX: Set false on error, not true!
+  isRecognizingRef.current = false;
+  setListening(false);
 
-      console.log("🔴 Error:", event.error);
+  console.log("🔴 Error:", event.error);
 
-      // Fatal errors
-      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-        recognition.shouldAutoRestart = false;
-        console.error("❌ Mic permission denied!");
-        alert("Please allow microphone access in browser settings");
-        return;
-      }
+  // Fatal errors
+  if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+    recognition.shouldAutoRestart = false;
+    console.error("❌ Mic permission denied!");
+    alert("Please allow microphone access in browser settings");
+    return;
+  }
 
-      // ✅ FIX: Silent ignore no-speech
-      if (event.error === "no-speech" || event.error === "audio-capture") {
-        return; // onend will handle restart
-      }
+  // ✅ FIX: Silent ignore no-speech
+  if (event.error === "no-speech" || event.error === "audio-capture") {
+    return; // onend will handle restart
+  }
 
-      // Other errors - attempt restart
-      if (recognition.shouldAutoRestart) {
-        const now = Date.now();
-        if (!recognition.restarting && now - recognition.lastRestartAt >= 1000) {
-          recognition.restarting = true;
-          setTimeout(() => {
-            try {
-              recognition.start();
-            } catch (e) {}
-            recognition.lastRestartAt = Date.now();
-            recognition.restarting = false;
-          }, 300);
+  // Other recoverable errors (network, aborted, etc.)
+  console.warn("⚠️ Recoverable error, attempting restart...");
+  
+  if (recognition.shouldAutoRestart) {
+    const now = Date.now();
+    const COOLDOWN_MS = 1000;
+
+    if (!recognition.restarting && now - recognition.lastRestartAt >= COOLDOWN_MS) {
+      recognition.restarting = true;
+      setTimeout(() => {
+        try {
+          recognition.start();
+          console.log("🔄 Restarted after error");
+        } catch (e) {
+          if (e.name !== "InvalidStateError") {
+            console.error("Restart failed:", e);
+          }
         }
-      }
-    };
+        recognition.lastRestartAt = Date.now();
+        recognition.restarting = false;
+      }, 300);
+    }
+  }
+};
 
     // ========== ONRESULT ==========
     recognition.onresult = async (event) => {

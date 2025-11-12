@@ -22,7 +22,7 @@ const userContext = ({ children }) => {
     }
   };
 
-  // ✅ FIX: Function ko useEffect se pehle define karo
+  // ✅ FIX: Function ko useEffect se PEHLE define karo
   const getGeminiResponse = async (command) => {
     try {
       console.log("🤖 Sending to backend:", command);
@@ -35,7 +35,7 @@ const userContext = ({ children }) => {
       return result.data;
     } catch (error) {
       console.error("❌ Gemini API error:", error);
-      return null; // ✅ FIX: Return null on error
+      return null;
     }
   };
 
@@ -53,7 +53,7 @@ const userContext = ({ children }) => {
     setFrontendImage,
     selectedImage,
     setSelectedImage,
-    getGeminiResponse,
+    getGeminiResponse, // ✅ This is now properly defined
   };
 
   return (

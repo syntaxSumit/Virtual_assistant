@@ -16,22 +16,26 @@ const userContext = ({ children }) => {
         withCredentials: true,
       });
       setUserData(result.data);
-      console.log(result.data);
+      console.log("✅ User data loaded:", result.data);
     } catch (error) {
-      console.log(error);
+      console.error("❌ User fetch error:", error);
     }
   };
 
+  // ✅ FIX: Function ko useEffect se pehle define karo
   const getGeminiResponse = async (command) => {
     try {
+      console.log("🤖 Sending to backend:", command);
       const result = await axios.post(
         `${serverUrl}/api/user/asktoassistant`,
         { command },
         { withCredentials: true }
       );
+      console.log("✅ Backend response:", result.data);
       return result.data;
     } catch (error) {
-      console.log(error);
+      console.error("❌ Gemini API error:", error);
+      return null; // ✅ FIX: Return null on error
     }
   };
 

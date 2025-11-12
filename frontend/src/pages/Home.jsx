@@ -251,14 +251,15 @@ const Home = () => {
 
     // ========== EVENT: ONEND ==========
     // Jab recognition service disconnect ho jaye (continuous mode me bhi hota hai)
-    // Yeh SINGLE SOURCE OF TRUTH hai restart ke liye - sabse important fix!
+    // Yeh SINGLE SOURCE OF TRUTH hai restart ke liye - sabse important!
     recognition.onend = () => {
       isRecognizingRef.current = false;
       setListening(false);
-      console.log("⚠️ Recognition ended");
 
       // Agar auto-restart disabled hai toh kuch mat karo (e.g. speaking time pe)
-      if (!recognition.shouldAutoRestart) return;
+      if (!recognition.shouldAutoRestart) {
+        return;
+      }
 
       const now = Date.now();
       const COOLDOWN_MS = 1000; // 1 second cooldown between restarts
@@ -273,7 +274,7 @@ const Home = () => {
       setTimeout(() => {
         try {
           recognition.start();
-          console.log("🔄 Recognition restarted");
+          // Silent restart - no console log for clean output
         } catch (e) {
           // InvalidStateError ignore karo (already started)
           if (e.name !== "InvalidStateError") {
@@ -288,19 +289,29 @@ const Home = () => {
     // ========== EVENT: ONERROR ==========
     // Jab koi error aaye recognition me
     recognition.onerror = (event) => {
-      isRecognizingRef.current = false; // ✅ FIX: Error pe recognizing = false mark karo
+      isRecognizingRef.current = false;
       setListening(false);
-      console.error("❌ Recognition error:", event.error);
 
       // Fatal errors: permission denied - auto-restart band kar do
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
         recognition.shouldAutoRestart = false;
-        console.error("Permission denied - auto-restart disabled");
+        console.error("❌ Permission denied - auto-restart disabled");
         return;
       }
 
-      // Recoverable errors: network, no-speech, audio-capture etc.
-      // Guarded restart attempt karo
+      // ✅ SILENT IGNORE: no-speech aur audio-capture errors
+      // Yeh normal hain jab background me listening chal rahi ho
+      // Mic silent hai ya background noise nahi hai = no-speech error
+      // onend automatically restart kar dega, double restart ki zarurat nahi
+      if (event.error === "no-speech" || event.error === "audio-capture") {
+        // Silently ignore - onend will handle the restart
+        return;
+      }
+
+      // Other recoverable errors: network, aborted etc.
+      console.warn("⚠️ Recognition error (recoverable):", event.error);
+
+      // Guarded restart attempt for remaining errors
       if (recognition.shouldAutoRestart) {
         const now = Date.now();
         const COOLDOWN_MS = 1000;

@@ -207,176 +207,146 @@ const Home = () => {
   };
 
   // ========== SPEECH RECOGNITION SETUP ==========
-  useEffect(() => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+ useEffect(() => {
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
-      console.error("❌ Speech Recognition not supported");
-      alert("Please use Chrome browser for voice features");
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-
-    // Settings
-    recognition.continuous = true;
-    recognition.lang = "en-US";
-    recognition.interimResults = false;
-
-    // ✅ FIX: Control flags on instance
-    recognition.shouldAutoRestart = true;
-    recognition.restarting = false;
-    recognition.lastRestartAt = 0;
-
-    recognitionRef.current = recognition;
-
-    // ✅ FIX: Single initial start
-    const initialTimer = setTimeout(() => {
-      console.log("🎯 Starting recognition...");
-      startRecognition();
-    }, 800);
-
-    // ========== ONSTART ==========
-    recognition.onstart = () => {
-      isRecognizingRef.current = true;
-      setListening(true);
-      console.log("✅ Recognition ACTIVE");
-      console.log("🎤 Say:", userData?.assistantName || "assistant name");
-    };
-
-    // ========== ONEND ==========
-    recognition.onend = () => {
-      isRecognizingRef.current = false;
-      setListening(false);
-
-      if (!recognition.shouldAutoRestart) {
-        return;
-      }
-
-      const now = Date.now();
-      const COOLDOWN = 1000;
-
-      if (recognition.restarting || now - recognition.lastRestartAt < COOLDOWN) {
-        return;
-      }
-
-      recognition.restarting = true;
-      setTimeout(() => {
-        try {
-          recognition.start();
-        } catch (e) {
-          if (e.name !== "InvalidStateError") {
-            console.error("Restart error:", e);
-          }
-        }
-        recognition.lastRestartAt = Date.now();
-        recognition.restarting = false;
-      }, 250);
-    };
-
-    // ========== ONERROR ==========
-  recognition.onerror = (event) => {
-  // ✅ FIX: Set false on error, not true!
-  isRecognizingRef.current = false;
-  setListening(false);
-
-  console.log("🔴 Error:", event.error);
-
-  // Fatal errors
-  if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-    recognition.shouldAutoRestart = false;
-    console.error("❌ Mic permission denied!");
-    alert("Please allow microphone access in browser settings");
+  if (!SpeechRecognition) {
+    console.error("❌ Speech Recognition not supported");
+    alert("Please use Chrome browser");
     return;
   }
 
-  // ✅ FIX: Silent ignore no-speech
-  if (event.error === "no-speech" || event.error === "audio-capture") {
-    return; // onend will handle restart
-  }
+  const recognition = new SpeechRecognition();
 
-  // Other recoverable errors (network, aborted, etc.)
-  console.warn("⚠️ Recoverable error, attempting restart...");
-  
-  if (recognition.shouldAutoRestart) {
+  recognition.continuous = true;
+  recognition.lang = "en-US";
+  recognition.interimResults = false;
+
+  recognition.shouldAutoRestart = true;
+  recognition.restarting = false;
+  recognition.lastRestartAt = 0;
+
+  recognitionRef.current = recognition;
+
+  const initialTimer = setTimeout(() => {
+    console.log("🎯 Starting recognition...");
+    startRecognition();
+  }, 800);
+
+  recognition.onstart = () => {
+    isRecognizingRef.current = true;
+    setListening(true);
+    console.log("✅ Recognition ACTIVE");
+    console.log("🎤 Say:", userData?.assistantName || "jarvis");
+  };
+
+  recognition.onend = () => {
+    isRecognizingRef.current = false;
+    setListening(false);
+
+    if (!recognition.shouldAutoRestart) return;
+
     const now = Date.now();
-    const COOLDOWN_MS = 1000;
+    if (recognition.restarting || now - recognition.lastRestartAt < 1000) return;
 
-    if (!recognition.restarting && now - recognition.lastRestartAt >= COOLDOWN_MS) {
-      recognition.restarting = true;
-      setTimeout(() => {
-        try {
-          recognition.start();
-          console.log("🔄 Restarted after error");
-        } catch (e) {
-          if (e.name !== "InvalidStateError") {
-            console.error("Restart failed:", e);
-          }
-        }
-        recognition.lastRestartAt = Date.now();
-        recognition.restarting = false;
-      }, 300);
-    }
-  }
-};
-
-    // ========== ONRESULT ==========
-    recognition.onresult = async (event) => {
-      const transcript =
-        event.results[event.results.length - 1][0].transcript.trim();
-
-      console.log("🎤 HEARD:", transcript);
-
-      if (!userData?.assistantName) {
-        console.warn("⚠️ Assistant name not loaded yet");
-        return;
-      }
-
-      if (
-        transcript.toLowerCase().includes(userData.assistantName.toLowerCase())
-      ) {
-        console.log("✅ Assistant name detected!");
-        setAiText("");
-        setUserText(transcript);
-
-        // Stop recognition
-        recognition.shouldAutoRestart = false;
-        try {
-          recognition.stop();
-        } catch (e) {}
-
-        isRecognizingRef.current = false;
-        setListening(false);
-
-        // Get response
-        const data = await getGeminiResponse(transcript);
-
-        if (data) {
-          console.log("🤖 Response:", data.response);
-          handleCommand(data);
-          setAiText(data.response);
-        } else {
-          console.error("❌ No response from backend");
-          // ✅ FIX: Restart even if no response
-          recognition.shouldAutoRestart = true;
-          setTimeout(() => startRecognition(), 1000);
-        }
-
-        setUserText("");
-      }
-    };
-
-    // ========== CLEANUP ==========
-    return () => {
+    recognition.restarting = true;
+    setTimeout(() => {
       try {
-        recognition.shouldAutoRestart = false;
-        recognition.stop();
-      } catch (e) {}
-      clearTimeout(initialTimer);
+        recognition.start();
+      } catch (e) {
+        if (e.name !== "InvalidStateError") console.error("Restart error:", e);
+      }
+      recognition.lastRestartAt = Date.now();
+      recognition.restarting = false;
+    }, 250);
+  };
+
+  recognition.onerror = (event) => {
+    isRecognizingRef.current = false;
+    setListening(false);
+
+    if (event.error !== "no-speech" && event.error !== "audio-capture") {
+      console.log("🔴 Error:", event.error);
+    }
+
+    if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+      recognition.shouldAutoRestart = false;
+      console.error("❌ Mic permission denied!");
+      alert("Please allow microphone access");
+      return;
+    }
+
+    if (event.error === "no-speech" || event.error === "audio-capture") {
+      return;
+    }
+
+    console.warn("⚠️ Recoverable error");
+
+    if (recognition.shouldAutoRestart) {
+      const now = Date.now();
+      if (!recognition.restarting && now - recognition.lastRestartAt >= 1000) {
+        recognition.restarting = true;
+        setTimeout(() => {
+          try {
+            recognition.start();
+            console.log("🔄 Restarted after error");
+          } catch (e) {
+            if (e.name !== "InvalidStateError") console.error("Restart failed:", e);
+          }
+          recognition.lastRestartAt = Date.now();
+          recognition.restarting = false;
+        }, 300);
+      }
+    }
+  };
+
+  recognition.onresult = async (event) => {
+    const transcript = event.results[event.results.length - 1][0].transcript.trim();
+    console.log("🎤 HEARD:", transcript);
+
+    if (!userData?.assistantName) {
+      console.warn("⚠️ Assistant name not loaded");
+      return;
+    }
+
+    if (transcript.toLowerCase().includes(userData.assistantName.toLowerCase())) {
+      console.log("✅ Assistant detected!");
+      setAiText("");
+      setUserText(transcript);
+
+      recognition.shouldAutoRestart = false;
+      try { recognition.stop(); } catch (e) {}
+
+      isRecognizingRef.current = false;
       setListening(false);
-    };
-  }, [userData?.assistantName, getGeminiResponse]);
+
+      const data = await getGeminiResponse(transcript);
+
+      if (data) {
+        console.log("🤖 Response:", data.response);
+        handleCommand(data);
+        setAiText(data.response);
+      } else {
+        console.error("❌ No response");
+        recognition.shouldAutoRestart = true;
+        setTimeout(() => startRecognition(), 1000);
+      }
+
+      setUserText("");
+    }
+  };
+
+  return () => {
+    try {
+      recognition.shouldAutoRestart = false;
+      recognition.stop();
+    } catch (e) {}
+    clearTimeout(initialTimer);
+    setListening(false);
+  };
+}, [userData?.assistantName, getGeminiResponse]);
+
 
   // ========== JSX (same as before) ==========
   return (

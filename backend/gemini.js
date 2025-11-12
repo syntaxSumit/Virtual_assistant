@@ -2,59 +2,82 @@ import axios from "axios";
 
 const geminiResponse = async (command, assistantName, userName) => {
   try {
-    const apiUrl = process.env.GEMINI_API_URL;
-    const prompt = ` You are a Virtual Assistant named ${assistantName}  Created by ${userName}. You are friendly and always ready to help. 
-    You are not Google . You will behave like voice assistant. You will answer in short and precise manner.
-    Your task is to understand the user natural language input and respond  with a json object like this:
+    const apiKey = process.env.GEMINI_API_KEY; // keep secrets in env
+    const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
+    // Normalize command (remove assistant name if present)
+    const strippedInput = command?.replace(new RegExp(assistantName, "ig"), "").trim();
 
-    {
-     "type  " :"general"| "  google_search" | "youtube_search"|"youtube_play"  | "wikipedia_search" | "instagram_open"|"facebook_open"|"youtube_open"|"news_search" | "weather" | "joke" | "quote" | "advice" | "get_time" | "get_date"| "get_month" | "get_day"  | "math" | "translation" | "definition" | "synonym" | "antonym" | "spell_check" | "grammar_check" | "currency_conversion" | "unit_conversion" | "reminder" | "alarm" | "timer" | "calendar_event" | "contact_lookup" | "email_management" | "task_management" | "note_taking"  ,
-     ""userInput ": "< original user input>" {only remove  your name from userinput if exists} and agar kisi ne google search ya youtube search ya wikipedia search ya news search karne ko bola hai to usme se sirf google search ya youtube search ya wikipedia search ya news search wala part nikal dena hai userinput se  }",
-     "response": "< your response to the user input >"
-    }
+    const systemPrompt = `
+You are a Virtual Assistant named ${assistantName}, created by ${userName}. You are friendly and respond briefly like a voice assistant. 
+You are not Google. Always reply ONLY with a single JSON object: { "type": <enum>, "userInput": <string>, "response": <string> }.
+- "type": infer user intent from the list (general, google_search, youtube_search, youtube_play, wikipedia_search, instagram_open, facebook_open, news_search, weather, get_time, get_date, get_day, get_month, joke, quote, advice, math, translation, definition, synonym, antonym, spell_check, grammar_check, currency_conversion, unit_conversion, reminder, alarm, timer, calendar_event, contact_lookup, email_management, task_management, note_taking, calculator_open).
+- "userInput": the original user sentence with your name removed if it appears.
+- "response": a short, voice-friendly line like "Sure, playing it now", "Here’s what I found", "It’s Tuesday", etc.
+Hindi rule: Agar koi puche "tumhe kisne banaya?", to "sumit" ka naam use karo: "{sumit}".
+If user asks for Google/YouTube/Wikipedia/News search, keep only the search text in userInput.
+`;
 
-    instructions:
-    - "type":determine the inherit of the user.
-    - "userInput": Original sentence the user spoke.
-    - "response": A short voice-friendly reply, e.g.,"Sure, Playing it now "," Here is where what i found ", "today is tuesday ",etc.
+    const jsonSchema = {
+      type: "object",
+      properties: {
+        type: {
+          type: "string",
+          enum: [
+            "general", "google_search", "youtube_search", "youtube_play", "wikipedia_search",
+            "instagram_open", "facebook_open", "news_search", "weather", "get_time", "get_date",
+            "get_day", "get_month", "joke", "quote", "advice", "math", "translation", "definition",
+            "synonym", "antonym", "spell_check", "grammar_check", "currency_conversion",
+            "unit_conversion", "reminder", "alarm", "timer", "calendar_event", "contact_lookup",
+            "email_management", "task_management", "note_taking", "calculator_open"
+          ]
+        },
+        userInput: { type: "string" },
+        response: { type: "string" }
+      },
+      required: ["type", "userInput", "response"],
+      additionalProperties: false
+    };
 
- Type meanings:
- - "general": if it's a factual or informational question.
-      aur agar koi aisa question puchta hai jiska answer tumhe pata hai uskp bhi general me rekho bas short answer dena
- - "google_search": if user wants to search something on Google .
- - "youtube_search": if user wants to search something on YouTube.
- - "youtube_play": if user wants to directly play a video or song.
- - "calculator_open": if user wants to open a calculator .
- - "instagram_open": if user wants to open instagram .
- - "facebook_open": if user wants to open facebook.
- -"weather-show": if user wants to know weather
- - "get_time": if user asks for current time.
- - "get_date": if user asks for today's date.
- - "get_day": if user asks what day it is.
- - "get_month": if user asks for the current month.
-
- Important:
-  - Use "{sumit}" agar koi puche tume kisne banaya
-  - Only respond with the json object, no additional text or explanation.
-
-  now your userInput is - ${command}
-    `;
-
-    const result = await axios.post(apiUrl, {
+    const payload = {
       contents: [
         {
-          parts: [
-            {
-              text: prompt,
-            },
-          ],
-        },
+          role: "user",
+          parts: [{ text: `${systemPrompt}\n\nnow your userInput is - ${strippedInput}` }]
+        }
       ],
+      generationConfig: {
+        response_mime_type: "application/json",
+        response_json_schema: jsonSchema
+      }
+    };
+
+    const result = await axios.post(apiUrl, payload, {
+      headers: { "Content-Type": "application/json" }
+      // Alternatively, you can send the API key as a header:
+      // headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey }
     });
-    return result.data.candidates[0].content.parts[0].text;
+
+    const text = result?.data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    // Hard parse with a fallback extractor
+    try {
+      return JSON.parse(text);
+    } catch {
+      const match = text.match(/\{[\s\S]*\}/);
+      return match ? JSON.parse(match[0]) : {
+        type: "general",
+        userInput: strippedInput,
+        response: "Sorry, I couldn’t process that."
+      };
+    }
   } catch (error) {
-    console.log(error);
+    console.error(error);
+    return {
+      type: "general",
+      userInput: command,
+      response: "There was a problem reaching the assistant."
+    };
   }
 };
 
